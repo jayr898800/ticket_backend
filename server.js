@@ -7,10 +7,14 @@ const fs = require("fs");
 const morgan = require("morgan");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
+const ticketRoutes = require("./routes/tickets");
+
+
 
 const app = express();
 app.use(express.json());
 app.use(cors());
+app.use("/tickets", ticketRoutes);   // 👈 no /api prefix unless you want it
 
 /* ------------------ LOGGING SETUP ------------------ */
 const logDir = path.join(__dirname, "logs");
