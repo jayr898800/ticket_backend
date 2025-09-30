@@ -2649,3 +2649,14 @@
 [0mGET /api/tickets [32m200[0m 16.940 ms - 14854[0m
 [0mPOST /api/tech/login [32m200[0m 3.404 ms - 208[0m
 [0mGET /api/tickets [32m200[0m 13.723 ms - 14854[0m
+[0mPOST /api/tech/login [32m200[0m 62.016 ms - 208[0m
+[0mGET /api/tickets [32m200[0m 61.300 ms - 12399[0m
+[0mGET /api/tickets [32m200[0m 18.557 ms - 12399[0m
+[0mPOST /api/tech/login [32m200[0m 4.233 ms - 208[0m
+[0mGET /api/tickets [32m200[0m 20.356 ms - 12399[0m
+[0mPOST /api/tech/login [32m200[0m 6.224 ms - 208[0m
+[0mGET /api/tickets [32m200[0m 28.717 ms - 12399[0m
+[0mDELETE /api/tickets/TKT-20250926-490-4U6R/logs/68d7a47afc4ef58e39a2e630 [31m500[0m 24.642 ms - 32[0m
+[0mDELETE /api/tickets/TKT-20250926-490-4U6R/logs/68d7a47afc4ef58e39a2e630 [31m500[0m 13.364 ms - 32[0m
+[0mDELETE /api/tickets/TKT-20250926-490-4U6R/logs/68d7a47afc4ef58e39a2e630 [32m200[0m 101.277 ms - 1402[0m
+[0mDELETE /api/tickets/TKT-20250926-490-4U6R/logs/68d7a486fc4ef58e39a2e635 [32m200[0m 18.050 ms - 1303[0m

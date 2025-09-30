@@ -6,17 +6,27 @@ const path = require("path");
 const fs = require("fs");
 const morgan = require("morgan");
 const jwt = require("jsonwebtoken");
+const helmet = require("helmet"); // Added for security headers
 require("dotenv").config();
 const ticketRoutes = require("./routes/tickets");
 
-
-
 const app = express();
+
+// ------------------ SECURITY ------------------
+app.use(helmet());
+
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1); // if behind a proxy (Render uses one)
+  app.use(helmet.hsts({ maxAge: 31536000 })); // enforce HTTPS
+  console.log("🔒 Production security headers enabled");
+}
+
+// ------------------ MIDDLEWARE ------------------
 app.use(express.json());
 app.use(cors());
-app.use("/tickets", ticketRoutes);   // 👈 no /api prefix unless you want it
+app.use("/tickets", ticketRoutes); // 👈 no /api prefix unless you want it
 
-/* ------------------ LOGGING SETUP ------------------ */
+// ------------------ LOGGING SETUP ------------------
 const logDir = path.join(__dirname, "logs");
 if (!fs.existsSync(logDir)) {
   fs.mkdirSync(logDir);
@@ -38,7 +48,7 @@ function logErrorToFile(message) {
   fs.appendFileSync(errorLogPath, `[${timestamp}] ${message}\n`);
 }
 
-/* ------------------ DATABASE ------------------ */
+// ------------------ DATABASE ------------------
 mongoose
   .connect(process.env.MONGO_URI, {
     useNewUrlParser: true,
@@ -72,7 +82,7 @@ mongoose
     logErrorToFile(`MongoDB connection error: ${err.stack || err}`);
   });
 
-/* ------------------ MODELS ------------------ */
+// ------------------ MODELS ------------------
 const customerSchema = new mongoose.Schema({
   firstName: { type: String },
   middleName: String,
@@ -81,7 +91,7 @@ const customerSchema = new mongoose.Schema({
   contactNumber: { type: String, unique: true },
   createdAt: { type: Date, default: Date.now },
 });
-const Customer = mongoose.model("Customer", customerSchema);
+const Customer = mongoose.models.Customer || mongoose.model("Customer", customerSchema);
 
 const ticketSchema = new mongoose.Schema({
   ticketNumber: { type: String, required: true },
@@ -103,16 +113,25 @@ const ticketSchema = new mongoose.Schema({
   ],
   createdAt: { type: Date, default: Date.now },
 });
-const Ticket = mongoose.model("Ticket", ticketSchema);
+
+// Pre-save to prevent enum errors on old tickets
+ticketSchema.pre("save", function (next) {
+  if (!this.ticketType) this.ticketType = "Repair";
+  const allowedStatuses = ["Pending", "Ongoing", "Completed", "Return"];
+  if (!allowedStatuses.includes(this.status)) this.status = "Pending";
+  next();
+});
+
+const Ticket = mongoose.models.Ticket || mongoose.model("Ticket", ticketSchema);
 
 const technicianSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true }, // plain password for testing
   createdAt: { type: Date, default: Date.now },
 });
-const Technician = mongoose.model("Technician", technicianSchema);
+const Technician = mongoose.models.Technician || mongoose.model("Technician", technicianSchema);
 
-/* ------------------ MULTER ------------------ */
+// ------------------ MULTER ------------------
 const storage = multer.diskStorage({
   destination: "uploads/",
   filename: (req, file, cb) => {
@@ -121,7 +140,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-/* ------------------ TICKET GENERATOR ------------------ */
+// ------------------ TICKET GENERATOR ------------------
 async function generateTicket() {
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, ""); // YYYYMMDD
   const startOfDay = new Date();
@@ -144,7 +163,7 @@ async function generateTicket() {
   return `TKT-${today}-${counter}-${suffix}`;
 }
 
-/* ------------------ AUTH ------------------ */
+// ------------------ AUTH ------------------
 const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 
 function authMiddleware(req, res, next) {
@@ -163,7 +182,7 @@ function authMiddleware(req, res, next) {
   }
 }
 
-// Technician signup (store plain password)
+// Technician signup
 app.post("/api/tech/signup", async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -176,22 +195,17 @@ app.post("/api/tech/signup", async (req, res) => {
   }
 });
 
-// Technician login (plain password check)
+// Technician login
 app.post("/api/tech/login", async (req, res) => {
   try {
     const { username, password } = req.body;
     const tech = await Technician.findOne({ username });
-    if (!tech) return res.status(401).json({ error: "Invalid credentials" });
-
-    if (password !== tech.password) {
+    if (!tech || password !== tech.password)
       return res.status(401).json({ error: "Invalid credentials" });
-    }
 
-    const token = jwt.sign(
-      { id: tech._id, username: tech.username },
-      JWT_SECRET,
-      { expiresIn: "8h" }
-    );
+    const token = jwt.sign({ id: tech._id, username: tech.username }, JWT_SECRET, {
+      expiresIn: "8h",
+    });
     res.json({ token });
   } catch (err) {
     console.error("❌ Login failed:", err);
@@ -199,7 +213,7 @@ app.post("/api/tech/login", async (req, res) => {
   }
 });
 
-/* ------------------ ROUTES ------------------ */
+// ------------------ ROUTES ------------------
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
@@ -218,9 +232,7 @@ app.post("/api/tickets", upload.array("images", 5), async (req, res) => {
       });
     }
 
-    let customer = await Customer.findOne({
-      contactNumber: req.body.contactNumber,
-    });
+    let customer = await Customer.findOne({ contactNumber: req.body.contactNumber });
     if (!customer) {
       customer = new Customer({
         firstName: req.body.firstName,
@@ -251,11 +263,7 @@ app.post("/api/tickets", upload.array("images", 5), async (req, res) => {
       problem: ticket.problem,
       images: ticket.images,
       status: ticket.status,
-      logs: ticket.logs.map((log) => ({
-        _id: log._id,
-        text: log.text,
-        createdAt: log.createdAt,
-      })),
+      logs: ticket.logs.map((log) => ({ _id: log._id, text: log.text, createdAt: log.createdAt })),
       createdAt: ticket.createdAt,
     });
   } catch (err) {
@@ -265,42 +273,22 @@ app.post("/api/tickets", upload.array("images", 5), async (req, res) => {
   }
 });
 
-// Get one ticket by number (public)
+// Get ticket by number
 app.get("/api/tickets/:ticketNumber", async (req, res) => {
   try {
-    const ticket = await Ticket.findOne({
-      ticketNumber: req.params.ticketNumber,
-    }).populate("customer");
-
+    const ticket = await Ticket.findOne({ ticketNumber: req.params.ticketNumber }).populate("customer");
     if (!ticket) return res.status(404).json({ error: "Ticket not found" });
-    res.json({
-      ticketNumber: ticket.ticketNumber,
-      ticketType: ticket.ticketType,
-      customer: ticket.customer,
-      unit: ticket.unit,
-      problem: ticket.problem,
-      images: ticket.images,
-      status: ticket.status,
-      logs: ticket.logs.map((log) => ({
-        _id: log._id,
-        text: log.text,
-        createdAt: log.createdAt,
-      })),
-      createdAt: ticket.createdAt,
-    });
+    res.json(ticket);
   } catch (err) {
     console.error("❌ Error retrieving ticket:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-// ✅ Get all tickets (protected)
+// Protected: Get all tickets
 app.get("/api/tickets", authMiddleware, async (req, res) => {
   try {
-    const tickets = await Ticket.find()
-      .populate("customer")
-      .sort({ createdAt: -1 });
-
+    const tickets = await Ticket.find().populate("customer").sort({ createdAt: -1 });
     res.json(
       tickets.map((t) => ({
         ticketNumber: t.ticketNumber,
@@ -310,11 +298,7 @@ app.get("/api/tickets", authMiddleware, async (req, res) => {
         problem: t.problem,
         images: t.images,
         status: t.status,
-        logs: t.logs.map((log) => ({
-          _id: log._id,
-          text: log.text,
-          createdAt: log.createdAt,
-        })),
+        logs: t.logs.map((log) => ({ _id: log._id, text: log.text, createdAt: log.createdAt })),
         createdAt: t.createdAt,
       }))
     );
@@ -324,7 +308,7 @@ app.get("/api/tickets", authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ Update ticket status (protected)
+// Update ticket status
 app.put("/api/tickets/:ticketNumber/status", authMiddleware, async (req, res) => {
   try {
     if (req.body && req.body.ticketType) {
@@ -344,7 +328,6 @@ app.put("/api/tickets/:ticketNumber/status", authMiddleware, async (req, res) =>
 
     ticket.status = status;
 
-    // ✅ Auto-log for all status changes with [SYSTEM] prefix
     const logText = `[SYSTEM] Ticket marked as ${status.toUpperCase()} by ${req.technician.username} on ${new Date().toLocaleString()}`;
     ticket.logs.push({ text: logText, createdAt: new Date() });
 
@@ -358,11 +341,7 @@ app.put("/api/tickets/:ticketNumber/status", authMiddleware, async (req, res) =>
       problem: ticket.problem,
       images: ticket.images,
       status: ticket.status,
-      logs: ticket.logs.map((log) => ({
-        _id: log._id,
-        text: log.text,
-        createdAt: log.createdAt,
-      })),
+      logs: ticket.logs.map((log) => ({ _id: log._id, text: log.text, createdAt: log.createdAt })),
       createdAt: ticket.createdAt,
     });
   } catch (err) {
@@ -371,7 +350,7 @@ app.put("/api/tickets/:ticketNumber/status", authMiddleware, async (req, res) =>
   }
 });
 
-// ✅ Add log to a ticket (protected)
+// Add log
 app.put("/api/tickets/:ticketNumber/log", authMiddleware, async (req, res) => {
   try {
     if (req.body && req.body.ticketType) {
@@ -379,9 +358,7 @@ app.put("/api/tickets/:ticketNumber/log", authMiddleware, async (req, res) => {
     }
 
     const { log } = req.body;
-    const ticket = await Ticket.findOne({
-      ticketNumber: req.params.ticketNumber,
-    }).populate("customer");
+    const ticket = await Ticket.findOne({ ticketNumber: req.params.ticketNumber }).populate("customer");
     if (!ticket) return res.status(404).json({ error: "Ticket not found" });
 
     ticket.logs.push({ text: log, createdAt: new Date() });
@@ -395,11 +372,7 @@ app.put("/api/tickets/:ticketNumber/log", authMiddleware, async (req, res) => {
       problem: ticket.problem,
       images: ticket.images,
       status: ticket.status,
-      logs: ticket.logs.map((log) => ({
-        _id: log._id,
-        text: log.text,
-        createdAt: log.createdAt,
-      })),
+      logs: ticket.logs.map((log) => ({ _id: log._id, text: log.text, createdAt: log.createdAt })),
       createdAt: ticket.createdAt,
     });
   } catch (err) {
@@ -408,7 +381,7 @@ app.put("/api/tickets/:ticketNumber/log", authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ Delete a log from a ticket (protected)
+// Delete log
 app.delete("/api/tickets/:ticketNumber/logs/:logId", authMiddleware, async (req, res) => {
   try {
     if (req.body && req.body.ticketType) {
@@ -430,11 +403,7 @@ app.delete("/api/tickets/:ticketNumber/logs/:logId", authMiddleware, async (req,
       problem: ticket.problem,
       images: ticket.images,
       status: ticket.status,
-      logs: ticket.logs.map((log) => ({
-        _id: log._id,
-        text: log.text,
-        createdAt: log.createdAt,
-      })),
+      logs: ticket.logs.map((log) => ({ _id: log._id, text: log.text, createdAt: log.createdAt })),
       createdAt: ticket.createdAt,
     });
   } catch (err) {
@@ -443,7 +412,7 @@ app.delete("/api/tickets/:ticketNumber/logs/:logId", authMiddleware, async (req,
   }
 });
 
-/* ------------------ START ------------------ */
+// ------------------ START ------------------
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () =>
   console.log(`Backend + frontend running at http://localhost:${PORT}`)

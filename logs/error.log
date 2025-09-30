@@ -46,3 +46,25 @@
     at C:\Users\jayr8\Desktop\ticket_backend\node_modules\mongoose\lib\document.js:3119:17
     at C:\Users\jayr8\Desktop\ticket_backend\node_modules\mongoose\lib\schemaType.js:1416:9
     at process.processTicksAndRejections (node:internal/process/task_queues:85:11)
+[2025-09-30T16:25:15.710Z] MongoDB connection error: MongooseError: The `uri` parameter to `openUri()` must be a string, got "undefined". Make sure the first parameter to `mongoose.connect()` or `mongoose.createConnection()` is a string.
+    at NativeConnection.createClient (C:\Users\jayr8\Desktop\Technician APP\ticket_backend\node_modules\mongoose\lib\drivers\node-mongodb-native\connection.js:237:11)
+    at NativeConnection.openUri (C:\Users\jayr8\Desktop\Technician APP\ticket_backend\node_modules\mongoose\lib\connection.js:1071:34)
+    at Mongoose.connect (C:\Users\jayr8\Desktop\Technician APP\ticket_backend\node_modules\mongoose\lib\mongoose.js:450:15)
+    at Object.<anonymous> (C:\Users\jayr8\Desktop\Technician APP\ticket_backend\server.js:41:4)
+    at Module._compile (node:internal/modules/cjs/loader:1706:14)
+    at Object..js (node:internal/modules/cjs/loader:1839:10)
+    at Module.load (node:internal/modules/cjs/loader:1441:32)
+    at Function._load (node:internal/modules/cjs/loader:1263:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+[2025-09-30T16:25:27.423Z] MongoDB connection error: MongooseError: The `uri` parameter to `openUri()` must be a string, got "undefined". Make sure the first parameter to `mongoose.connect()` or `mongoose.createConnection()` is a string.
+    at NativeConnection.createClient (C:\Users\jayr8\Desktop\Technician APP\ticket_backend\node_modules\mongoose\lib\drivers\node-mongodb-native\connection.js:237:11)
+    at NativeConnection.openUri (C:\Users\jayr8\Desktop\Technician APP\ticket_backend\node_modules\mongoose\lib\connection.js:1071:34)
+    at Mongoose.connect (C:\Users\jayr8\Desktop\Technician APP\ticket_backend\node_modules\mongoose\lib\mongoose.js:450:15)
+    at Object.<anonymous> (C:\Users\jayr8\Desktop\Technician APP\ticket_backend\server.js:41:4)
+    at Module._compile (node:internal/modules/cjs/loader:1706:14)
+    at Object..js (node:internal/modules/cjs/loader:1839:10)
+    at Module.load (node:internal/modules/cjs/loader:1441:32)
+    at Function._load (node:internal/modules/cjs/loader:1263:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
