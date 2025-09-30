@@ -2660,3 +2660,14 @@
 [0mDELETE /api/tickets/TKT-20250926-490-4U6R/logs/68d7a47afc4ef58e39a2e630 [31m500[0m 13.364 ms - 32[0m
 [0mDELETE /api/tickets/TKT-20250926-490-4U6R/logs/68d7a47afc4ef58e39a2e630 [32m200[0m 101.277 ms - 1402[0m
 [0mDELETE /api/tickets/TKT-20250926-490-4U6R/logs/68d7a486fc4ef58e39a2e635 [32m200[0m 18.050 ms - 1303[0m
+[0mPOST /api/tech/login [32m200[0m 24.046 ms - 208[0m
+[0mGET /api/tickets [32m200[0m 46.427 ms - 14604[0m
+[0mPUT /api/tickets/TKT-20250926-490-4U6R/status [32m200[0m 96.644 ms - 1455[0m
+[0mPUT /api/tickets/TKT-20250926-490-4U6R/status [32m200[0m 17.750 ms - 1605[0m
+[0mPUT /api/tickets/TKT-20250926-490-4U6R/status [32m200[0m 13.806 ms - 1762[0m
+[0mDELETE /api/tickets/TKT-20250926-490-4U6R/logs/68dc0c47d0ffec8ae5afe66e [32m200[0m 14.192 ms - 1608[0m
+[0mDELETE /api/tickets/TKT-20250926-490-4U6R/logs/68dc0c45d0ffec8ae5afe660 [32m200[0m 11.026 ms - 1457[0m
+[0mDELETE /api/tickets/TKT-20250926-490-4U6R/logs/68dc0c41d0ffec8ae5afe653 [32m200[0m 10.094 ms - 1305[0m
+[0mGET /api/tickets [32m200[0m 22.205 ms - 14606[0m
+[0mPOST /api/tech/login [32m200[0m 6.753 ms - 208[0m
+[0mGET /api/tickets [32m200[0m 19.527 ms - 14606[0m
