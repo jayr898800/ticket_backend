@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Check Ticket Status</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: url("background.png") center/cover no-repeat;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .card {
+      background: #fff;
+      padding: 30px;
+      border-radius: 12px;
+      max-width: 600px;
+      width: 100%;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+    }
+
+    .card h1 {
+      font-size: 22px;
+      font-weight: 800;
+      color: #0a2342;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .form-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    input {
+      flex: 1;
+      padding: 12px 14px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+    }
+
+    button {
+      background: #1d79f2;
+      color: #fff;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #0f5fd8;
+    }
+
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      background: #f9f9f9;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      display: none;
+    }
+
+    .result h2 {
+      margin: 0 0 10px;
+      font-size: 18px;
+      color: #1d79f2;
+    }
+
+    .result p {
+      margin: 5px 0;
+      font-size: 14px;
+      color: #333;
+    }
+
+    /* ✅ Status Glow Animations */
+    @keyframes pulseRed {
+      0%,100% { box-shadow: 0 0 5px #040404, 0 0 15px red; }
+      50%     { box-shadow: 0 0 20px red, 0 0 40px red; }
+    }
+    @keyframes pulseYellow {
+      0%,100% { box-shadow: 0 0 5px #67634d, 0 0 15px #000000; }
+      50%     { box-shadow: 0 0 20px gold, 0 0 40px gold; }
+    }
+    @keyframes pulseGreen {
+      0%,100% { box-shadow: 0 0 5px #040404, 0 0 15px limegreen; }
+      50%     { box-shadow: 0 0 20px limegreen, 0 0 40px limegreen; }
+    }
+
+    .status-return {
+      background: red;
+      color: #fff;
+      font-weight: bold;
+      padding: 6px 14px;
+      border-radius: 8px;
+      display: inline-block;
+      animation: pulseRed 1.5s infinite;
+    }
+    .status-ongoing {
+      background: #ffdf00;
+      color: #000000;
+      font-weight: bold;
+      padding: 6px 14px;
+      border-radius: 8px;
+      display: inline-block;
+      animation: pulseYellow 1.5s infinite;
+    }
+    .status-completed {
+      background: green;
+      color: #fff;
+      font-weight: bold;
+      padding: 6px 14px;
+      border-radius: 8px;
+      display: inline-block;
+      animation: pulseGreen 1.5s infinite;
+    }
+
+    /* ✅ Progress bar */
+    .progress-container {
+      margin: 15px 0;
+      background: #eee;
+      border-radius: 20px;
+      overflow: hidden;
+      height: 20px;
+      position: relative;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, #1d79f2, #0f5fd8);
+      text-align: center;
+      color: white;
+      font-size: 12px;
+      font-weight: bold;
+      line-height: 20px;
+      transition: width 0.6s ease;
+    }
+
+    .images {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .images img {
+      width: 100px;
+      height: 80px;
+      object-fit: cover;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+
+    /* ✅ Timeline style logs */
+    .logs {
+      margin-top: 15px;
+      max-height: 250px;
+      overflow-y: auto;
+      padding-left: 20px;
+      position: relative;
+    }
+    .logs::before {
+      content: "";
+      position: absolute;
+      left: 8px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: #1d79f2;
+    }
+    .log-entry {
+      margin-bottom: 12px;
+      font-size: 13px;
+      position: relative;
+      padding-left: 10px;
+    }
+    .log-entry::before {
+      content: "●";
+      position: absolute;
+      left: -12px;
+      top: 0;
+      color: #1d79f2;
+      font-size: 14px;
+    }
+    .log-entry:first-child {
+      background: #e6f9e6;
+      border-radius: 6px;
+      padding: 5px;
+      font-weight: bold;
+    }
+    .log-entry span {
+      font-size: 11px;
+      color: gray;
+    }
+
+    .error {
+      margin-top: 15px;
+      color: red;
+      font-weight: bold;
+      display: none;
+    }
+
+    /* ✅ Toast Notification */
+    .toast {
+      visibility: hidden;
+      min-width: 220px;
+      margin-left: -110px;
+      background-color: #333;
+      color: #fff;
+      text-align: center;
+      border-radius: 6px;
+      padding: 12px;
+      position: fixed;
+      z-index: 1000;
+      left: 50%;
+      bottom: 30px;
+      font-size: 14px;
+      opacity: 0;
+      transition: opacity 0.5s, bottom 0.5s;
+    }
+    .toast.show {
+      visibility: visible;
+      opacity: 1;
+      bottom: 50px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>CHECK TICKET STATUS</h1>
+
+    <div class="form-group">
+      <input type="text" id="ticketInput" placeholder="Enter Ticket Number">
+      <button id="searchBtn">SEARCH</button>
+    </div>
+
+    <div id="error" class="error"></div>
+
+    <div id="result" class="result">
+      <h2>Ticket Details</h2>
+      <p><strong>Customer:</strong> <span id="customerName"></span></p>
+      <p><strong>Contact:</strong> <span id="contactNumber"></span></p>
+      <p><strong>Unit:</strong> <span id="unit"></span></p>
+      <p><strong>Problem:</strong> <span id="problem"></span></p>
+      <p><strong>Status:</strong> <span id="status"></span></p>
+
+      <div class="progress-container">
+        <div id="progressBar" class="progress-bar">0%</div>
+      </div>
+
+      <div>
+        <p><strong>Images:</strong></p>
+        <div id="images" class="images"></div>
+      </div>
+
+      <div>
+        <p><strong>Technician Logs:</strong></p>
+        <div id="logs" class="logs"></div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:12px;">
+        <button id="copyBtn" style="background:#4caf50; flex:1;">COPY TICKET</button>
+        <button id="copyLogsBtn" style="background:#1d79f2; flex:1;">COPY LOGS</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast">Copied!</div>
+
+  <script>
+    const searchBtn = document.getElementById("searchBtn");
+    const ticketInput = document.getElementById("ticketInput");
+    const errorEl = document.getElementById("error");
+    const resultEl = document.getElementById("result");
+    const customerNameEl = document.getElementById("customerName");
+    const contactNumberEl = document.getElementById("contactNumber");
+    const unitEl = document.getElementById("unit");
+    const problemEl = document.getElementById("problem");
+    const statusEl = document.getElementById("status");
+    const imagesContainer = document.getElementById("images");
+    const logsContainer = document.getElementById("logs");
+    const copyBtn = document.getElementById("copyBtn");
+    const copyLogsBtn = document.getElementById("copyLogsBtn");
+    const toast = document.getElementById("toast");
+    const progressBar = document.getElementById("progressBar");
+
+    let currentTicket = "";
+
+    async function fetchTicket(ticketNumber) {
+      try {
+        const res = await fetch(`http://localhost:5000/api/tickets/${ticketNumber}`);
+        if (!res.ok) throw new Error("Ticket not found");
+        const data = await res.json();
+
+        const customer = data.customer || {};
+        customerNameEl.textContent =
+          [customer.firstName, customer.middleName, customer.lastName, customer.suffix]
+            .filter(Boolean).join(" ");
+        contactNumberEl.textContent = customer.contactNumber || "";
+        unitEl.textContent = data.unit;
+        problemEl.textContent = data.problem;
+
+        // ✅ Apply status badge with background + glow
+        statusEl.textContent = data.status;
+        statusEl.className = "";
+        if (data.status === "Return") statusEl.classList.add("status-return");
+        if (data.status === "Ongoing") statusEl.classList.add("status-ongoing");
+        if (data.status === "Completed") statusEl.classList.add("status-completed");
+
+        updateProgressBar(data.status);
+
+        imagesContainer.innerHTML = "";
+        if (data.images && data.images.length > 0) {
+          data.images.forEach(imgPath => {
+            const img = document.createElement("img");
+            img.src = `http://localhost:5000/${imgPath}`;
+            imagesContainer.appendChild(img);
+          });
+        }
+
+        logsContainer.innerHTML = "";
+        if (data.logs && data.logs.length > 0) {
+          [...data.logs].reverse().forEach(log => {
+            const div = document.createElement("div");
+            div.className = "log-entry";
+            const date = log.createdAt ? new Date(log.createdAt).toLocaleString() : "";
+            div.innerHTML = `✔️ ${log.text} <span>(${date})</span>`;
+            logsContainer.appendChild(div);
+          });
+        } else {
+          logsContainer.innerHTML = "<em>No repair history available.</em>";
+        }
+
+        currentTicket = data.ticketNumber;
+        copyBtn.style.display = "inline-block";
+        copyLogsBtn.style.display = "inline-block";
+
+        resultEl.style.display = "block";
+        errorEl.style.display = "none";
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.style.display = "block";
+        resultEl.style.display = "none";
+      }
+    }
+
+    function updateProgressBar(status) {
+      let progress = 0;
+      if (status === "Pending") progress = 33;
+      if (status === "Ongoing") progress = 66;
+      if (status === "Completed") progress = 100;
+      progressBar.style.width = progress + "%";
+      progressBar.textContent = progress + "%";
+    }
+
+    searchBtn.addEventListener("click", () => {
+      const ticketNumber = ticketInput.value.trim();
+      if (!ticketNumber) {
+        errorEl.textContent = "Please enter a ticket number.";
+        errorEl.style.display = "block";
+        resultEl.style.display = "none";
+        return;
+      }
+      fetchTicket(ticketNumber);
+    });
+
+    copyBtn.addEventListener("click", () => {
+      if (currentTicket) {
+        navigator.clipboard.writeText(currentTicket).then(() => {
+          showToast("Ticket number copied!");
+        });
+      }
+    });
+
+    copyLogsBtn.addEventListener("click", () => {
+      const logs = [...logsContainer.querySelectorAll(".log-entry")].map(l => l.innerText).join("\n");
+      if (logs) {
+        navigator.clipboard.writeText(logs).then(() => {
+          showToast("Logs copied!");
+        });
+      }
+    });
+
+    setInterval(() => {
+      if (currentTicket) {
+        fetchTicket(currentTicket);
+      }
+    }, 60000);
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.className = "toast show";
+      setTimeout(() => {
+        toast.className = "toast";
+      }, 2500);
+    }
+  </script>
+</body>
+</html>
