@@ -99,7 +99,7 @@ const Ticket = mongoose.models.Ticket || mongoose.model("Ticket", ticketSchema);
 
 const technicianSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
+  password: { type: String, required: true }, // 🔴 plain text — use bcrypt in production
   createdAt: { type: Date, default: Date.now },
 });
 const Technician = mongoose.models.Technician || mongoose.model("Technician", technicianSchema);
