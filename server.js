@@ -45,7 +45,7 @@ function logErrorToFile(message) {
 }
 
 /* ------------------ DATABASE ------------------ */
-mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true })
   .then(async () => {
     console.log("✅ Connected to MongoDB Atlas");
 
@@ -99,7 +99,7 @@ const Ticket = mongoose.models.Ticket || mongoose.model("Ticket", ticketSchema);
 
 const technicianSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
-  password: { type: String, required: true }, // 🔴 plain text — use bcrypt in production
+  password: { type: String, required: true }, // ⚠️ plain text for now
   createdAt: { type: Date, default: Date.now },
 });
 const Technician = mongoose.models.Technician || mongoose.model("Technician", technicianSchema);
@@ -202,12 +202,11 @@ app.post("/api/tickets", upload.array("images", 5), async (req, res) => {
 /* ------------------ GET SINGLE TICKET ------------------ */
 app.get("/api/tickets/:ticketNumber", authMiddleware, async (req, res) => {
   try {
-    const limitLogs = 10;
     const ticket = await Ticket.findOne({ ticketNumber: req.params.ticketNumber })
       .populate("customer", "firstName contactNumber")
       .lean();
     if (!ticket) return res.status(404).json({ error: "Ticket not found" });
-    ticket.logs = (ticket.logs || []).slice(-limitLogs);
+    ticket.logs = (ticket.logs || []).slice(-10);
     res.json(ticket);
   } catch (err) { console.error("❌ Error retrieving ticket:", err); logErrorToFile(`Error retrieving ticket: ${err.stack || err}`); res.status(500).json({ error: "Server error" }); }
 });
@@ -215,12 +214,11 @@ app.get("/api/tickets/:ticketNumber", authMiddleware, async (req, res) => {
 /* ------------------ GET ALL TICKETS ------------------ */
 app.get("/api/tickets", authMiddleware, async (req, res) => {
   try {
-    const limitLogs = 10;
     const tickets = await Ticket.find()
       .populate("customer", "firstName contactNumber")
       .sort({ createdAt: -1 })
       .lean();
-    tickets.forEach(t => t.logs = (t.logs || []).slice(-limitLogs));
+    tickets.forEach(t => t.logs = (t.logs || []).slice(-10));
     res.json(tickets);
   } catch (err) { console.error("❌ Error fetching tickets:", err); logErrorToFile(`Error fetching tickets: ${err.stack || err}`); res.status(500).json({ error: "Server error" }); }
 });
@@ -262,15 +260,25 @@ app.put("/api/tickets/:ticketNumber/log", authMiddleware, async (req, res) => {
 app.delete("/api/tickets/:ticketNumber/logs/:logId", authMiddleware, async (req, res) => {
   try {
     const { ticketNumber, logId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(logId)) {
+      return res.status(400).json({ error: "Invalid logId" });
+    }
+
     const ticket = await Ticket.findOneAndUpdate(
       { ticketNumber },
-      { $pull: { logs: { _id: mongoose.Types.ObjectId(logId) } } },
+      { $pull: { logs: { _id: logId } } }, // ✅ let mongoose cast
       { new: true }
     ).populate("customer", "firstName contactNumber").lean();
+
     if (!ticket) return res.status(404).json({ error: "Ticket not found" });
     ticket.logs = (ticket.logs || []).slice(-10);
     res.json(ticket);
-  } catch (err) { console.error("❌ Error deleting log:", err); logErrorToFile(`Error deleting log: ${err.stack || err}`); res.status(500).json({ error: "Failed to delete log" }); }
+  } catch (err) {
+    console.error("❌ Error deleting log:", err);
+    logErrorToFile(`Error deleting log: ${err.stack || err}`);
+    res.status(500).json({ error: "Failed to delete log" });
+  }
 });
 
 /* ------------------ START SERVER ------------------ */
