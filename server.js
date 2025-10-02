@@ -281,6 +281,31 @@ app.delete("/api/tickets/:ticketNumber/logs/:logId", authMiddleware, async (req,
   }
 });
 
+/* ------------------ PUBLIC CUSTOMER ROUTE ------------------ */
+app.get("/public/tickets/:ticketNumber", async (req, res) => {
+  try {
+    const ticket = await Ticket.findOne({ ticketNumber: req.params.ticketNumber })
+      .populate("customer", "firstName middleName lastName suffix contactNumber")
+      .lean();
+
+    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+
+    res.json({
+      ticketNumber: ticket.ticketNumber,
+      customer: ticket.customer,
+      unit: ticket.unit,
+      problem: ticket.problem,
+      status: ticket.status,
+      images: ticket.images,
+      logs: (ticket.logs || []).slice(-10),
+      createdAt: ticket.createdAt,
+    });
+  } catch (err) {
+    console.error("❌ Public ticket fetch error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 /* ------------------ START SERVER ------------------ */
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Backend + frontend running at http://localhost:${PORT}`));
