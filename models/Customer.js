@@ -1,12 +1,14 @@
 const mongoose = require("mongoose");
 
 const customerSchema = new mongoose.Schema({
-  firstName: { type: String, required: true },
+  firstName: String,
   middleName: String,
-  lastName: { type: String, required: true },
+  lastName: String,
   suffix: String,
-  contactNumber: { type: String, required: true, unique: true },
-  createdAt: { type: Date, default: Date.now }
+  contactNumber: { type: String, unique: true },
+  createdAt: { type: Date, default: Date.now },
 });
 
-module.exports = mongoose.model("Customer", customerSchema);
+customerSchema.index({ contactNumber: 1 }, { unique: true });
+
+module.exports = mongoose.models.Customer || mongoose.model("Customer", customerSchema);
