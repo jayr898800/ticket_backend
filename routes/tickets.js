@@ -187,24 +187,28 @@ router.delete("/:ticketNumber/logs/:logId", async (req, res) => {
 router.get("/public/:ticketNumber", async (req, res) => {
   try {
     const ticket = await Ticket.findOne({ ticketNumber: req.params.ticketNumber })
-      .populate("customer", "firstName middleName lastName suffix contactNumber")
+      .populate("customer", "firstName middleName lastName suffix contactNumber email address")
       .lean();
 
-    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+    if (!ticket) {
+      console.warn("⚠️ Public lookup failed, not found:", req.params.ticketNumber);
+      return res.status(404).json({ error: "Ticket not found" });
+    }
 
-    res.json({
+    // Always return JSON
+    return res.json({
       ticketNumber: ticket.ticketNumber,
-      customer: ticket.customer,
-      unit: ticket.unit,
-      problem: ticket.problem,
-      status: ticket.status,
-      images: ticket.images,
+      customer: ticket.customer || {},
+      unit: ticket.unit || "",
+      problem: ticket.problem || "",
+      status: ticket.status || "Pending",
+      images: ticket.images || [],
       logs: (ticket.logs || []).slice(-10),
-      createdAt: ticket.createdAt,
+      createdAt: ticket.createdAt || null,
     });
   } catch (err) {
     console.error("❌ Public ticket fetch error:", err);
-    res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
