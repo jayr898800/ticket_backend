@@ -20,20 +20,21 @@ async function generateTicket() {
   startOfDay.setHours(0, 0, 0, 0);
   const endOfDay = new Date();
   endOfDay.setHours(23, 59, 59, 999);
+
   const countToday = await Ticket.countDocuments({
     createdAt: { $gte: startOfDay, $lte: endOfDay },
   });
+
   const counter = 300 + countToday * 10;
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   let suffix = "";
   for (let i = 0; i < 4; i++)
     suffix += chars.charAt(Math.floor(Math.random() * chars.length));
+
   return `TKT-${today}-${counter}-${suffix}`;
 }
 
-/* ---- Routes ---- */
-
-// Create ticket
+/* ------------------ CREATE TICKET ------------------ */
 router.post("/", upload.array("images", 5), async (req, res) => {
   try {
     const allowedTypes = ["Free Checkup", "Repair"];
@@ -66,13 +67,14 @@ router.post("/", upload.array("images", 5), async (req, res) => {
   }
 });
 
-// Get all tickets
+/* ------------------ GET ALL TICKETS ------------------ */
 router.get("/", async (req, res) => {
   try {
     const tickets = await Ticket.find()
       .populate("customer", "firstName contactNumber")
       .sort({ createdAt: -1 })
       .lean();
+
     tickets.forEach((t) => (t.logs = (t.logs || []).slice(-10)));
     res.json(tickets);
   } catch (err) {
@@ -81,7 +83,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Get single ticket
+/* ------------------ GET SINGLE TICKET ------------------ */
 router.get("/:ticketNumber", async (req, res) => {
   try {
     const ticket = await Ticket.findOne({
@@ -100,7 +102,7 @@ router.get("/:ticketNumber", async (req, res) => {
   }
 });
 
-// Update status
+/* ------------------ UPDATE STATUS ------------------ */
 router.put("/:ticketNumber/status", async (req, res) => {
   try {
     const { status } = req.body;
@@ -120,7 +122,9 @@ router.put("/:ticketNumber/status", async (req, res) => {
         },
       },
       { new: true }
-    ).populate("customer", "firstName contactNumber").lean();
+    )
+      .populate("customer", "firstName contactNumber")
+      .lean();
 
     if (!ticket) return res.status(404).json({ error: "Ticket not found" });
 
@@ -132,7 +136,7 @@ router.put("/:ticketNumber/status", async (req, res) => {
   }
 });
 
-// Add log
+/* ------------------ ADD LOG ------------------ */
 router.put("/:ticketNumber/log", async (req, res) => {
   try {
     const { log } = req.body;
@@ -140,7 +144,9 @@ router.put("/:ticketNumber/log", async (req, res) => {
       { ticketNumber: req.params.ticketNumber },
       { $push: { logs: { text: log, createdAt: new Date() } } },
       { new: true }
-    ).populate("customer", "firstName contactNumber").lean();
+    )
+      .populate("customer", "firstName contactNumber")
+      .lean();
 
     if (!ticket) return res.status(404).json({ error: "Ticket not found" });
 
@@ -152,7 +158,7 @@ router.put("/:ticketNumber/log", async (req, res) => {
   }
 });
 
-// Delete log
+/* ------------------ DELETE LOG ------------------ */
 router.delete("/:ticketNumber/logs/:logId", async (req, res) => {
   try {
     const { ticketNumber, logId } = req.params;
@@ -163,7 +169,9 @@ router.delete("/:ticketNumber/logs/:logId", async (req, res) => {
       { ticketNumber },
       { $pull: { logs: { _id: logId } } },
       { new: true }
-    ).populate("customer", "firstName contactNumber").lean();
+    )
+      .populate("customer", "firstName contactNumber")
+      .lean();
 
     if (!ticket) return res.status(404).json({ error: "Ticket not found" });
 
@@ -172,6 +180,31 @@ router.delete("/:ticketNumber/logs/:logId", async (req, res) => {
   } catch (err) {
     console.error("❌ Error deleting log:", err);
     res.status(500).json({ error: "Failed to delete log" });
+  }
+});
+
+/* ------------------ PUBLIC ENDPOINT ------------------ */
+router.get("/public/:ticketNumber", async (req, res) => {
+  try {
+    const ticket = await Ticket.findOne({ ticketNumber: req.params.ticketNumber })
+      .populate("customer", "firstName middleName lastName suffix contactNumber")
+      .lean();
+
+    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+
+    res.json({
+      ticketNumber: ticket.ticketNumber,
+      customer: ticket.customer,
+      unit: ticket.unit,
+      problem: ticket.problem,
+      status: ticket.status,
+      images: ticket.images,
+      logs: (ticket.logs || []).slice(-10),
+      createdAt: ticket.createdAt,
+    });
+  } catch (err) {
+    console.error("❌ Public ticket fetch error:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
