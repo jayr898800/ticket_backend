@@ -1,56 +1,66 @@
 const express = require("express");
-const router = express.Router();
+const multer = require("multer");
+const mongoose = require("mongoose");
 const Ticket = require("../models/Ticket");
 const Customer = require("../models/Customer");
-const upload = require("../middleware/upload");
-const verifyToken = require("../middleware/verifyToken"); // ✅ middleware for auth
 
-/* ------------------ TICKET NUMBER GENERATOR ------------------ */
-function generateTicket() {
-  const today = new Date().toISOString().split("T")[0].replace(/-/g, "");
-  const counter = Math.floor(100 + Math.random() * 900);
-  const suffix = Math.random().toString(36).substr(2, 4).toUpperCase();
+const router = express.Router();
+
+/* ---- Multer ---- */
+const storage = multer.diskStorage({
+  destination: "uploads/",
+  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
+});
+const upload = multer({ storage });
+
+/* ---- Ticket generator ---- */
+async function generateTicket() {
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date();
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const countToday = await Ticket.countDocuments({
+    createdAt: { $gte: startOfDay, $lte: endOfDay },
+  });
+
+  const counter = 300 + countToday * 10;
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let suffix = "";
+  for (let i = 0; i < 4; i++)
+    suffix += chars.charAt(Math.floor(Math.random() * chars.length));
+
   return `TKT-${today}-${counter}-${suffix}`;
 }
 
 /* ------------------ CREATE TICKET ------------------ */
-router.post("/create", upload.array("images", 5), async (req, res) => {
+router.post("/", upload.array("images", 5), async (req, res) => {
   try {
-    const { firstName, middleName, lastName, suffix, contactNumber, unit, problem } = req.body;
+    const allowedTypes = ["Free Checkup", "Repair"];
+    if (!allowedTypes.includes(req.body.ticketType))
+      return res.status(400).json({ error: "Invalid ticketType" });
 
-    // Create or find customer
-    let customer = await Customer.findOne({ contactNumber });
+    let customer = await Customer.findOne({
+      contactNumber: req.body.contactNumber,
+    }).lean();
+
     if (!customer) {
-      customer = await Customer.create({
-        firstName,
-        middleName,
-        lastName,
-        suffix,
-        contactNumber,
-      });
+      customer = await new Customer(req.body).save();
+      customer = customer.toObject();
     }
 
-    // Generate ticket number
-    const ticketNumber = generateTicket();
-
-    const images = req.files ? req.files.map((f) => f.path.replace(/\\/g, "/")) : [];
-
-    const ticket = await Ticket.create({
+    const ticketNumber = await generateTicket();
+    const ticket = await new Ticket({
       ticketNumber,
       customer: customer._id,
-      unit,
-      problem,
-      status: "Pending",
-      images,
-      logs: [
-        {
-          text: `Ticket created for ${firstName} ${lastName}`,
-          createdAt: new Date(),
-        },
-      ],
-    });
+      ticketType: req.body.ticketType,
+      unit: req.body.unit,
+      problem: req.body.problem,
+      images: req.files.map((f) => f.path),
+    }).save();
 
-    res.json({ success: true, ticketNumber });
+    res.json(ticket);
   } catch (err) {
     console.error("❌ Error creating ticket:", err);
     res.status(500).json({ error: "Failed to create ticket" });
@@ -61,36 +71,44 @@ router.post("/create", upload.array("images", 5), async (req, res) => {
 router.get("/", async (req, res) => {
   try {
     const tickets = await Ticket.find()
-      .populate("customer", "firstName middleName lastName suffix contactNumber")
+      .populate("customer", "firstName contactNumber")
+      .sort({ createdAt: -1 })
       .lean();
 
+    tickets.forEach((t) => (t.logs = (t.logs || []).slice(-10)));
     res.json(tickets);
   } catch (err) {
     console.error("❌ Error fetching tickets:", err);
-    res.status(500).json({ error: "Failed to fetch tickets" });
+    res.status(500).json({ error: "Server error" });
   }
 });
 
 /* ------------------ GET SINGLE TICKET ------------------ */
 router.get("/:ticketNumber", async (req, res) => {
   try {
-    const ticket = await Ticket.findOne({ ticketNumber: req.params.ticketNumber })
-      .populate("customer", "firstName middleName lastName suffix contactNumber")
+    const ticket = await Ticket.findOne({
+      ticketNumber: req.params.ticketNumber,
+    })
+      .populate("customer", "firstName contactNumber")
       .lean();
 
     if (!ticket) return res.status(404).json({ error: "Ticket not found" });
 
-    res.json(ticket); // ✅ full logs
+    ticket.logs = (ticket.logs || []).slice(-10);
+    res.json(ticket);
   } catch (err) {
-    console.error("❌ Error fetching ticket:", err);
-    res.status(500).json({ error: "Failed to fetch ticket" });
+    console.error("❌ Error retrieving ticket:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
 /* ------------------ UPDATE STATUS ------------------ */
-router.post("/status/:ticketNumber", async (req, res) => {
+router.put("/:ticketNumber/status", async (req, res) => {
   try {
     const { status } = req.body;
+    const allowedStatuses = ["Pending", "Ongoing", "Completed", "Return"];
+    if (!allowedStatuses.includes(status))
+      return res.status(400).json({ error: "Invalid status" });
 
     const ticket = await Ticket.findOneAndUpdate(
       { ticketNumber: req.params.ticketNumber },
@@ -98,18 +116,19 @@ router.post("/status/:ticketNumber", async (req, res) => {
         $set: { status },
         $push: {
           logs: {
-            text: `Status updated to ${status}`,
+            text: `[SYSTEM] Ticket marked as ${status.toUpperCase()}`,
             createdAt: new Date(),
           },
         },
       },
       { new: true }
     )
-      .populate("customer", "firstName middleName lastName suffix contactNumber")
+      .populate("customer", "firstName contactNumber")
       .lean();
 
     if (!ticket) return res.status(404).json({ error: "Ticket not found" });
 
+    ticket.logs = (ticket.logs || []).slice(-10);
     res.json(ticket);
   } catch (err) {
     console.error("❌ Error updating status:", err);
@@ -118,16 +137,91 @@ router.post("/status/:ticketNumber", async (req, res) => {
 });
 
 /* ------------------ ADD LOG ------------------ */
-router.post("/log/:ticketNumber", async (req, res) => {
+router.put("/:ticketNumber/log", async (req, res) => {
   try {
-    const { text } = req.body;
+    const { log } = req.body;
+    const ticket = await Ticket.findOneAndUpdate(
+      { ticketNumber: req.params.ticketNumber },
+      { $push: { logs: { text: log, createdAt: new Date() } } },
+      { new: true }
+    )
+      .populate("customer", "firstName contactNumber")
+      .lean();
+
+    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+
+    ticket.logs = (ticket.logs || []).slice(-10);
+    res.json(ticket);
+  } catch (err) {
+    console.error("❌ Error adding log:", err);
+    res.status(500).json({ error: "Failed to add log" });
+  }
+});
+
+/* ------------------ DELETE LOG ------------------ */
+router.delete("/:ticketNumber/logs/:logId", async (req, res) => {
+  try {
+    const { ticketNumber, logId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(logId))
+      return res.status(400).json({ error: "Invalid logId" });
+
+    const ticket = await Ticket.findOneAndUpdate(
+      { ticketNumber },
+      { $pull: { logs: { _id: logId } } },
+      { new: true }
+    )
+      .populate("customer", "firstName contactNumber")
+      .lean();
+
+    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+
+    ticket.logs = (ticket.logs || []).slice(-10);
+    res.json(ticket);
+  } catch (err) {
+    console.error("❌ Error deleting log:", err);
+    res.status(500).json({ error: "Failed to delete log" });
+  }
+});
+
+/* ------------------ PUBLIC ENDPOINT ------------------ */
+router.get("/public/:ticketNumber", async (req, res) => {
+  try {
+    const ticket = await Ticket.findOne({ ticketNumber: req.params.ticketNumber })
+      .populate("customer", "firstName middleName lastName suffix contactNumber email address")
+      .lean();
+
+    if (!ticket) {
+      console.warn("⚠️ Public lookup failed, not found:", req.params.ticketNumber);
+      return res.status(404).json({ error: "Ticket not found" });
+    }
+
+    return res.json({
+      ticketNumber: ticket.ticketNumber,
+      customer: ticket.customer || {},
+      unit: ticket.unit || "",
+      problem: ticket.problem || "",
+      status: ticket.status || "Pending",
+      images: ticket.images || [],
+      logs: (ticket.logs || []).slice(-10),
+      createdAt: ticket.createdAt || null,
+    });
+  } catch (err) {
+    console.error("❌ Public ticket fetch error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* ------------------ UPDATE TICKET DETAILS (NEW) ------------------ */
+router.post("/update/:ticketNumber", async (req, res) => {
+  try {
+    const { firstName, middleName, lastName, suffix, contactNumber, unit, problem } = req.body;
 
     const ticket = await Ticket.findOneAndUpdate(
       { ticketNumber: req.params.ticketNumber },
       {
         $push: {
           logs: {
-            text,
+            text: `Update - Customer: ${[firstName, middleName, lastName, suffix].filter(Boolean).join(" ")} | Contact: ${contactNumber} | Unit: ${unit} | Problem: ${problem}`,
             createdAt: new Date(),
           },
         },
@@ -139,92 +233,11 @@ router.post("/log/:ticketNumber", async (req, res) => {
 
     if (!ticket) return res.status(404).json({ error: "Ticket not found" });
 
+    ticket.logs = (ticket.logs || []).slice(-10);
     res.json(ticket);
-  } catch (err) {
-    console.error("❌ Error adding log:", err);
-    res.status(500).json({ error: "Failed to add log" });
-  }
-});
-
-/* ------------------ UPDATE TICKET DETAILS (WITH VERSION HISTORY) ------------------ */
-router.post("/update/:ticketNumber", async (req, res) => {
-  try {
-    const { firstName, middleName, lastName, suffix, contactNumber, unit, problem } = req.body;
-
-    // Find ticket and populate customer
-    let ticket = await Ticket.findOne({ ticketNumber: req.params.ticketNumber }).populate("customer");
-    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
-
-    const oldCustomer = ticket.customer
-      ? {
-          firstName: ticket.customer.firstName,
-          middleName: ticket.customer.middleName,
-          lastName: ticket.customer.lastName,
-          suffix: ticket.customer.suffix,
-          contactNumber: ticket.customer.contactNumber,
-        }
-      : {};
-
-    const oldUnit = ticket.unit;
-    const oldProblem = ticket.problem;
-
-    // Update customer if exists
-    if (ticket.customer) {
-      await Customer.findByIdAndUpdate(ticket.customer._id, {
-        firstName,
-        middleName,
-        lastName,
-        suffix,
-        contactNumber,
-      });
-    }
-
-    // Update ticket fields
-    ticket.unit = unit || ticket.unit;
-    ticket.problem = problem || ticket.problem;
-
-    // Add log entry showing before → after
-    ticket.logs = ticket.logs || [];
-    ticket.logs.push({
-      text: `Updated ticket → 
-        Customer: ${[oldCustomer.firstName, oldCustomer.middleName, oldCustomer.lastName, oldCustomer.suffix].filter(Boolean).join(" ")} (${oldCustomer.contactNumber || "-"}) 
-        ➝ ${[firstName, middleName, lastName, suffix].filter(Boolean).join(" ")} (${contactNumber || "-"}) | 
-        Unit: ${oldUnit} ➝ ${unit} | 
-        Problem: ${oldProblem} ➝ ${problem}`,
-      createdAt: new Date(),
-    });
-
-    await ticket.save();
-
-    // Return updated ticket with full logs
-    const updated = await Ticket.findOne({ ticketNumber: req.params.ticketNumber })
-      .populate("customer", "firstName middleName lastName suffix contactNumber")
-      .lean();
-
-    res.json(updated);
   } catch (err) {
     console.error("❌ Error updating ticket:", err);
     res.status(500).json({ error: "Failed to update ticket" });
-  }
-});
-
-/* ------------------ DELETE TICKET (ADMIN/TECH ONLY) ------------------ */
-router.delete("/:ticketNumber", verifyToken, async (req, res) => {
-  try {
-    // Ensure user has proper role
-    if (!req.user || (req.user.role !== "admin" && req.user.role !== "tech")) {
-      return res.status(403).json({ error: "Forbidden: Not authorized to delete tickets" });
-    }
-
-    const { ticketNumber } = req.params;
-
-    const ticket = await Ticket.findOneAndDelete({ ticketNumber });
-    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
-
-    res.json({ success: true, message: `Ticket ${ticketNumber} deleted` });
-  } catch (err) {
-    console.error("❌ Error deleting ticket:", err);
-    res.status(500).json({ error: "Failed to delete ticket" });
   }
 });
 
