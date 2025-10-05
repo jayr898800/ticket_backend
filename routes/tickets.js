@@ -195,7 +195,6 @@ router.get("/public/:ticketNumber", async (req, res) => {
       return res.status(404).json({ error: "Ticket not found" });
     }
 
-    // Always return JSON
     return res.json({
       ticketNumber: ticket.ticketNumber,
       customer: ticket.customer || {},
@@ -209,6 +208,36 @@ router.get("/public/:ticketNumber", async (req, res) => {
   } catch (err) {
     console.error("❌ Public ticket fetch error:", err);
     return res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* ------------------ UPDATE TICKET DETAILS (NEW) ------------------ */
+router.post("/update/:ticketNumber", async (req, res) => {
+  try {
+    const { firstName, middleName, lastName, suffix, contactNumber, unit, problem } = req.body;
+
+    const ticket = await Ticket.findOneAndUpdate(
+      { ticketNumber: req.params.ticketNumber },
+      {
+        $push: {
+          logs: {
+            text: `Update - Customer: ${[firstName, middleName, lastName, suffix].filter(Boolean).join(" ")} | Contact: ${contactNumber} | Unit: ${unit} | Problem: ${problem}`,
+            createdAt: new Date(),
+          },
+        },
+      },
+      { new: true }
+    )
+      .populate("customer", "firstName middleName lastName suffix contactNumber")
+      .lean();
+
+    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+
+    ticket.logs = (ticket.logs || []).slice(-10);
+    res.json(ticket);
+  } catch (err) {
+    console.error("❌ Error updating ticket:", err);
+    res.status(500).json({ error: "Failed to update ticket" });
   }
 });
 
