@@ -76,13 +76,23 @@ router.post("/", upload.array("images", 5), async (req, res) => {
       ).end(qrBuffer);
     });
 
+    // ✅ Normalize defaults before saving
+    const safeUnit =
+      req.body.unit && req.body.unit.trim() !== ""
+        ? req.body.unit
+        : "Unknown Unit";
+    const safeProblem =
+      req.body.problem && req.body.problem.trim() !== ""
+        ? req.body.problem
+        : "Not specified";
+
     // Save ticket with qrCodeUrl
     const ticket = await new Ticket({
       ticketNumber,
       customer: customer._id,
       ticketType: req.body.ticketType,
-      unit: req.body.unit,
-      problem: req.body.problem,
+      unit: safeUnit,
+      problem: safeProblem,
       images: req.files.map((f) => f.path),
       qrCodeUrl: uploadRes.secure_url,
     }).save();
@@ -136,18 +146,22 @@ router.get("/:ticketNumber", async (req, res) => {
 /* ------------------ UPDATE STATUS ------------------ */
 router.put("/:ticketNumber/status", async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, unit, problem } = req.body;
     const allowedStatuses = ["Pending", "Ongoing", "Completed", "Return"];
     if (!allowedStatuses.includes(status))
       return res.status(400).json({ error: "Invalid status" });
 
+    // ✅ Normalize defaults for unit/problem
+    const safeUnit = unit && unit.trim() !== "" ? unit : "Unknown Unit";
+    const safeProblem = problem && problem.trim() !== "" ? problem : "Not specified";
+
     const ticket = await Ticket.findOneAndUpdate(
       { ticketNumber: req.params.ticketNumber },
       {
-        $set: { status },
+        $set: { status, unit: safeUnit, problem: safeProblem },
         $push: {
           logs: {
-            text: `[SYSTEM] Ticket marked as ${status.toUpperCase()}`,
+            text: `[SYSTEM] Ticket marked as ${status.toUpperCase()} | Unit: ${safeUnit} | Problem: ${safeProblem}`,
             createdAt: new Date(),
           },
         },
@@ -248,12 +262,16 @@ router.post("/update/:ticketNumber", async (req, res) => {
   try {
     const { firstName, middleName, lastName, suffix, contactNumber, unit, problem } = req.body;
 
+    // ✅ Normalize defaults here too
+    const safeUnit = unit && unit.trim() !== "" ? unit : "Unknown Unit";
+    const safeProblem = problem && problem.trim() !== "" ? problem : "Not specified";
+
     const ticket = await Ticket.findOneAndUpdate(
       { ticketNumber: req.params.ticketNumber },
       {
         $push: {
           logs: {
-            text: `Update - Customer: ${[firstName, middleName, lastName, suffix].filter(Boolean).join(" ")} | Contact: ${contactNumber} | Unit: ${unit} | Problem: ${problem}`,
+            text: `Update - Customer: ${[firstName, middleName, lastName, suffix].filter(Boolean).join(" ")} | Contact: ${contactNumber || "N/A"} | Unit: ${safeUnit} | Problem: ${safeProblem}`,
             createdAt: new Date(),
           },
         },

@@ -12,8 +12,11 @@ const ticketSchema = new mongoose.Schema(
     ticketNumber: { type: String, required: true, unique: true },
     customer: { type: mongoose.Schema.Types.ObjectId, ref: "Customer", required: true },
     ticketType: { type: String, enum: ["Free Checkup", "Repair"], required: true },
-    unit: { type: String, required: true },
-    problem: { type: String, required: true },
+
+    // ✅ Added defaults so empty fields won't cause 500
+    unit: { type: String, required: true, default: "Unknown Unit" },
+    problem: { type: String, required: true, default: "Not specified" },
+
     images: [{ type: String }],
     status: {
       type: String,
