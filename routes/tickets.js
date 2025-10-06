@@ -68,21 +68,26 @@ router.post("/", async (req, res) => {
     // Generate QR as buffer
     const qrBuffer = await QRCode.toBuffer(checkUrl, { type: "png", width: 300 });
 
-    // Upload QR to Cloudinary
-    const uploadRes = await new Promise((resolve, reject) => {
-      cloudinary.uploader.upload_stream(
-        {
-          folder: "ronaldshop/qrcodes",
-          public_id: ticketNumber,
-          overwrite: true,
-          resource_type: "image",
-        },
-        (err, result) => {
-          if (err) reject(err);
-          else resolve(result);
-        }
-      ).end(qrBuffer);
-    });
+    // Upload QR to Cloudinary with a timeout wrapper
+    const uploadRes = await Promise.race([
+      new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          {
+            folder: "ronaldshop/qrcodes",
+            public_id: ticketNumber,
+            overwrite: true,
+            resource_type: "image",
+          },
+          (err, result) => {
+            if (err) reject(err);
+            else resolve(result);
+          }
+        ).end(qrBuffer);
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Cloudinary upload timeout (15s)")), 15000)
+      ),
+    ]);
 
     // ✅ Normalize defaults
     const safeUnit = unit && unit.trim() !== "" ? unit : "Unknown Unit";

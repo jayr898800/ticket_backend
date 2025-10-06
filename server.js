@@ -40,4 +40,21 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 /* Start */
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+const server = app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+
+/* Handle shutdown signals */
+process.on("SIGTERM", () => {
+  console.warn("⚠️ Received SIGTERM: host is shutting down this process.");
+  server.close(() => {
+    console.log("✅ HTTP server closed cleanly after SIGTERM.");
+    process.exit(0);
+  });
+});
+
+process.on("SIGINT", () => {
+  console.warn("⚠️ Received SIGINT (manual stop).");
+  server.close(() => {
+    console.log("✅ HTTP server closed cleanly after SIGINT.");
+    process.exit(0);
+  });
+});
