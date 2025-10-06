@@ -255,25 +255,41 @@ router.post("/update/:ticketNumber", async (req, res) => {
     const safeUnit = unit && unit.trim() !== "" ? unit : "Unknown Unit";
     const safeProblem = problem && problem.trim() !== "" ? problem : "Not specified";
 
-    const ticket = await Ticket.findOneAndUpdate(
-      { ticketNumber: req.params.ticketNumber },
-      {
-        $push: {
-          logs: {
-            text: `Update - Customer: ${[firstName, middleName, lastName, suffix].filter(Boolean).join(" ")} | Contact: ${contactNumber || "N/A"} | Unit: ${safeUnit} | Problem: ${safeProblem}`,
-            createdAt: new Date(),
-          },
-        },
-      },
-      { new: true }
-    )
+    // Find ticket
+    const ticket = await Ticket.findOne({ ticketNumber: req.params.ticketNumber });
+    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+
+    // Update customer fields if present
+    if (ticket.customer) {
+      await Customer.findByIdAndUpdate(ticket.customer, {
+        $set: {
+          firstName: firstName || "",
+          middleName: middleName || "",
+          lastName: lastName || "",
+          suffix: suffix || "",
+          contactNumber: contactNumber || ""
+        }
+      });
+    }
+
+    // Update ticket fields
+    ticket.unit = safeUnit;
+    ticket.problem = safeProblem;
+
+    // Add log entry
+    ticket.logs.push({
+      text: `Updated Ticket - Customer: ${[firstName, middleName, lastName, suffix].filter(Boolean).join(" ")} | Contact: ${contactNumber || "N/A"} | Unit: ${safeUnit} | Problem: ${safeProblem}`,
+      createdAt: new Date(),
+    });
+
+    await ticket.save();
+
+    const updated = await Ticket.findById(ticket._id)
       .populate("customer", "firstName middleName lastName suffix contactNumber")
       .lean();
 
-    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
-
-    ticket.logs = (ticket.logs || []).slice(-10);
-    res.json(ticket);
+    updated.logs = (updated.logs || []).slice(-10);
+    res.json(updated);
   } catch (err) {
     console.error("❌ Error updating ticket:", err);
     res.status(500).json({ error: "Failed to update ticket" });
