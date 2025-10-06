@@ -1,5 +1,4 @@
 const express = require("express");
-const multer = require("multer");
 const mongoose = require("mongoose");
 const Ticket = require("../models/Ticket");
 const Customer = require("../models/Customer");
@@ -7,13 +6,6 @@ const QRCode = require("qrcode");
 const cloudinary = require("../cloudinary");
 
 const router = express.Router();
-
-/* ---- Multer ---- */
-const storage = multer.diskStorage({
-  destination: "uploads/",
-  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
-});
-const upload = multer({ storage });
 
 /* ---- Ticket generator ---- */
 async function generateTicket() {
@@ -37,16 +29,15 @@ async function generateTicket() {
 }
 
 /* ------------------ CREATE TICKET ------------------ */
-router.post("/", upload.array("images", 5), async (req, res) => {
+router.post("/", async (req, res) => {
   try {
+    const { ticketType, contactNumber, unit, problem, images = [] } = req.body;
+
     const allowedTypes = ["Free Checkup", "Repair"];
-    if (!allowedTypes.includes(req.body.ticketType))
+    if (!allowedTypes.includes(ticketType))
       return res.status(400).json({ error: "Invalid ticketType" });
 
-    let customer = await Customer.findOne({
-      contactNumber: req.body.contactNumber,
-    }).lean();
-
+    let customer = await Customer.findOne({ contactNumber }).lean();
     if (!customer) {
       customer = await new Customer(req.body).save();
       customer = customer.toObject();
@@ -60,7 +51,7 @@ router.post("/", upload.array("images", 5), async (req, res) => {
     // Generate QR as buffer
     const qrBuffer = await QRCode.toBuffer(checkUrl, { type: "png", width: 300 });
 
-    // Upload to Cloudinary
+    // Upload QR to Cloudinary
     const uploadRes = await new Promise((resolve, reject) => {
       cloudinary.uploader.upload_stream(
         {
@@ -76,24 +67,18 @@ router.post("/", upload.array("images", 5), async (req, res) => {
       ).end(qrBuffer);
     });
 
-    // ✅ Normalize defaults before saving
-    const safeUnit =
-      req.body.unit && req.body.unit.trim() !== ""
-        ? req.body.unit
-        : "Unknown Unit";
-    const safeProblem =
-      req.body.problem && req.body.problem.trim() !== ""
-        ? req.body.problem
-        : "Not specified";
+    // ✅ Normalize defaults
+    const safeUnit = unit && unit.trim() !== "" ? unit : "Unknown Unit";
+    const safeProblem = problem && problem.trim() !== "" ? problem : "Not specified";
 
-    // Save ticket with qrCodeUrl
+    // Save ticket with qrCodeUrl + Cloudinary image URLs (already provided)
     const ticket = await new Ticket({
       ticketNumber,
       customer: customer._id,
-      ticketType: req.body.ticketType,
+      ticketType,
       unit: safeUnit,
       problem: safeProblem,
-      images: req.files.map((f) => f.path),
+      images, // should already be Cloudinary URLs
       qrCodeUrl: uploadRes.secure_url,
     }).save();
 
@@ -127,9 +112,7 @@ router.get("/", async (req, res) => {
 /* ------------------ GET SINGLE TICKET ------------------ */
 router.get("/:ticketNumber", async (req, res) => {
   try {
-    const ticket = await Ticket.findOne({
-      ticketNumber: req.params.ticketNumber,
-    })
+    const ticket = await Ticket.findOne({ ticketNumber: req.params.ticketNumber })
       .populate("customer", "firstName contactNumber")
       .lean();
 
@@ -151,7 +134,6 @@ router.put("/:ticketNumber/status", async (req, res) => {
     if (!allowedStatuses.includes(status))
       return res.status(400).json({ error: "Invalid status" });
 
-    // ✅ Normalize defaults for unit/problem
     const safeUnit = unit && unit.trim() !== "" ? unit : "Unknown Unit";
     const safeProblem = problem && problem.trim() !== "" ? problem : "Not specified";
 
@@ -262,7 +244,6 @@ router.post("/update/:ticketNumber", async (req, res) => {
   try {
     const { firstName, middleName, lastName, suffix, contactNumber, unit, problem } = req.body;
 
-    // ✅ Normalize defaults here too
     const safeUnit = unit && unit.trim() !== "" ? unit : "Unknown Unit";
     const safeProblem = problem && problem.trim() !== "" ? problem : "Not specified";
 
