@@ -31,7 +31,18 @@ async function generateTicket() {
 /* ------------------ CREATE TICKET ------------------ */
 router.post("/", async (req, res) => {
   try {
-    const { ticketType, contactNumber, unit, problem, images = [] } = req.body;
+    // ✅ destructure with safe defaults
+    const {
+      ticketType,
+      contactNumber,
+      unit,
+      problem,
+      images = [],
+      firstName,
+      middleName,
+      lastName,
+      suffix,
+    } = req.body;
 
     const allowedTypes = ["Free Checkup", "Repair"];
     if (!allowedTypes.includes(ticketType))
@@ -39,7 +50,13 @@ router.post("/", async (req, res) => {
 
     let customer = await Customer.findOne({ contactNumber }).lean();
     if (!customer) {
-      customer = await new Customer(req.body).save();
+      customer = await new Customer({
+        firstName,
+        middleName,
+        lastName,
+        suffix,
+        contactNumber,
+      }).save();
       customer = customer.toObject();
     }
 
@@ -71,14 +88,14 @@ router.post("/", async (req, res) => {
     const safeUnit = unit && unit.trim() !== "" ? unit : "Unknown Unit";
     const safeProblem = problem && problem.trim() !== "" ? problem : "Not specified";
 
-    // Save ticket with qrCodeUrl + Cloudinary image URLs (already provided)
+    // Save ticket with qrCodeUrl + Cloudinary image URLs (already provided by frontend)
     const ticket = await new Ticket({
       ticketNumber,
       customer: customer._id,
       ticketType,
       unit: safeUnit,
       problem: safeProblem,
-      images, // should already be Cloudinary URLs
+      images: Array.isArray(images) ? images : [],
       qrCodeUrl: uploadRes.secure_url,
     }).save();
 
@@ -239,7 +256,7 @@ router.get("/public/:ticketNumber", async (req, res) => {
   }
 });
 
-/* ------------------ UPDATE TICKET DETAILS (NEW) ------------------ */
+/* ------------------ UPDATE TICKET DETAILS ------------------ */
 router.post("/update/:ticketNumber", async (req, res) => {
   try {
     const { firstName, middleName, lastName, suffix, contactNumber, unit, problem } = req.body;
