@@ -31,7 +31,6 @@ async function generateTicket() {
 /* ------------------ CREATE TICKET ------------------ */
 router.post("/", async (req, res) => {
   try {
-    // ✅ destructure with safe defaults
     const {
       ticketType,
       contactNumber,
@@ -61,14 +60,10 @@ router.post("/", async (req, res) => {
     }
 
     const ticketNumber = await generateTicket();
-
-    // Build public check link for QR code
     const checkUrl = `https://ronaldshop.netlify.app/checking_ticket_status.html?ticket=${ticketNumber}`;
 
-    // Generate QR as buffer
     const qrBuffer = await QRCode.toBuffer(checkUrl, { type: "png", width: 300 });
 
-    // Upload QR to Cloudinary with a timeout wrapper
     const uploadRes = await Promise.race([
       new Promise((resolve, reject) => {
         cloudinary.uploader.upload_stream(
@@ -78,10 +73,7 @@ router.post("/", async (req, res) => {
             overwrite: true,
             resource_type: "image",
           },
-          (err, result) => {
-            if (err) reject(err);
-            else resolve(result);
-          }
+          (err, result) => (err ? reject(err) : resolve(result))
         ).end(qrBuffer);
       }),
       new Promise((_, reject) =>
@@ -89,11 +81,9 @@ router.post("/", async (req, res) => {
       ),
     ]);
 
-    // ✅ Normalize defaults
     const safeUnit = unit && unit.trim() !== "" ? unit : "Unknown Unit";
     const safeProblem = problem && problem.trim() !== "" ? problem : "Not specified";
 
-    // Save ticket with qrCodeUrl + Cloudinary image URLs (already provided by frontend)
     const ticket = await new Ticket({
       ticketNumber,
       customer: customer._id,
@@ -104,11 +94,7 @@ router.post("/", async (req, res) => {
       qrCodeUrl: uploadRes.secure_url,
     }).save();
 
-    res.json({
-      ticket,
-      checkUrl,
-      qrCodeUrl: uploadRes.secure_url,
-    });
+    res.json({ ticket, checkUrl, qrCodeUrl: uploadRes.secure_url });
   } catch (err) {
     console.error("❌ Error creating ticket:", err);
     res.status(500).json({ error: "Failed to create ticket" });
@@ -291,6 +277,31 @@ router.post("/update/:ticketNumber", async (req, res) => {
   } catch (err) {
     console.error("❌ Error updating ticket:", err);
     res.status(500).json({ error: "Failed to update ticket" });
+  }
+});
+
+/* ------------------ ADMIN DELETE TICKET ------------------ */
+router.delete("/:ticketNumber", async (req, res) => {
+  try {
+    const { ticketNumber } = req.params;
+
+    const ticket = await Ticket.findOneAndDelete({ ticketNumber });
+
+    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+
+    // Optional: also delete QR code from Cloudinary if it exists
+    if (ticket.qrCodeUrl) {
+      try {
+        await cloudinary.uploader.destroy(`ronaldshop/qrcodes/${ticketNumber}`);
+      } catch (err) {
+        console.warn("⚠️ Failed to remove QR from Cloudinary:", err.message);
+      }
+    }
+
+    res.json({ success: true, message: `Ticket ${ticketNumber} deleted` });
+  } catch (err) {
+    console.error("❌ Error deleting ticket:", err);
+    res.status(500).json({ error: "Failed to delete ticket" });
   }
 });
 
