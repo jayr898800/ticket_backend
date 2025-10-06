@@ -3,6 +3,8 @@ const multer = require("multer");
 const mongoose = require("mongoose");
 const Ticket = require("../models/Ticket");
 const Customer = require("../models/Customer");
+const QRCode = require("qrcode");
+const cloudinary = require("../cloudinary");
 
 const router = express.Router();
 
@@ -51,6 +53,30 @@ router.post("/", upload.array("images", 5), async (req, res) => {
     }
 
     const ticketNumber = await generateTicket();
+
+    // Build public check link for QR code
+    const checkUrl = `https://ronaldshop.netlify.app/checking_ticket_status.html?ticket=${ticketNumber}`;
+
+    // Generate QR as buffer
+    const qrBuffer = await QRCode.toBuffer(checkUrl, { type: "png", width: 300 });
+
+    // Upload to Cloudinary
+    const uploadRes = await new Promise((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        {
+          folder: "ronaldshop/qrcodes",
+          public_id: ticketNumber,
+          overwrite: true,
+          resource_type: "image",
+        },
+        (err, result) => {
+          if (err) reject(err);
+          else resolve(result);
+        }
+      ).end(qrBuffer);
+    });
+
+    // Save ticket with qrCodeUrl
     const ticket = await new Ticket({
       ticketNumber,
       customer: customer._id,
@@ -58,9 +84,14 @@ router.post("/", upload.array("images", 5), async (req, res) => {
       unit: req.body.unit,
       problem: req.body.problem,
       images: req.files.map((f) => f.path),
+      qrCodeUrl: uploadRes.secure_url,
     }).save();
 
-    res.json(ticket);
+    res.json({
+      ticket,
+      checkUrl,
+      qrCodeUrl: uploadRes.secure_url,
+    });
   } catch (err) {
     console.error("❌ Error creating ticket:", err);
     res.status(500).json({ error: "Failed to create ticket" });
@@ -204,6 +235,7 @@ router.get("/public/:ticketNumber", async (req, res) => {
       images: ticket.images || [],
       logs: (ticket.logs || []).slice(-10),
       createdAt: ticket.createdAt || null,
+      qrCodeUrl: ticket.qrCodeUrl || null,
     });
   } catch (err) {
     console.error("❌ Public ticket fetch error:", err);
