@@ -255,11 +255,11 @@ router.post("/update/:ticketNumber", async (req, res) => {
     const safeUnit = unit && unit.trim() !== "" ? unit : "Unknown Unit";
     const safeProblem = problem && problem.trim() !== "" ? problem : "Not specified";
 
-    // Find the ticket first
+    // Find ticket
     const ticket = await Ticket.findOne({ ticketNumber: req.params.ticketNumber });
     if (!ticket) return res.status(404).json({ error: "Ticket not found" });
 
-    // Update linked customer (if any)
+    // Update customer fields if present
     if (ticket.customer) {
       await Customer.findByIdAndUpdate(ticket.customer, {
         $set: {
@@ -267,8 +267,8 @@ router.post("/update/:ticketNumber", async (req, res) => {
           middleName: middleName || "",
           lastName: lastName || "",
           suffix: suffix || "",
-          contactNumber: contactNumber || "",
-        },
+          contactNumber: contactNumber || ""
+        }
       });
     }
 
@@ -276,7 +276,7 @@ router.post("/update/:ticketNumber", async (req, res) => {
     ticket.unit = safeUnit;
     ticket.problem = safeProblem;
 
-    // Add log for audit
+    // Add log entry
     ticket.logs.push({
       text: `Updated Ticket - Customer: ${[firstName, middleName, lastName, suffix].filter(Boolean).join(" ")} | Contact: ${contactNumber || "N/A"} | Unit: ${safeUnit} | Problem: ${safeProblem}`,
       createdAt: new Date(),
