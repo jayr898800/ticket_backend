@@ -60,7 +60,7 @@ router.post("/", async (req, res) => {
     }
 
     const ticketNumber = await generateTicket();
-    const checkUrl = `https://ronaldshop.netlify.app/checking_ticket_status.html?ticket=${ticketNumber}`;
+    const checkUrl = `https://ronaldselectronicshop.netlify.app/checking_ticket_status.html?ticket=${ticketNumber}`;
 
     const qrBuffer = await QRCode.toBuffer(checkUrl, { type: "png", width: 300 });
 
@@ -68,7 +68,7 @@ router.post("/", async (req, res) => {
       new Promise((resolve, reject) => {
         cloudinary.uploader.upload_stream(
           {
-            folder: "ronaldshop/qrcodes",
+            folder: "ronaldselectronicshop/qrcodes",
             public_id: ticketNumber,
             overwrite: true,
             resource_type: "image",
@@ -308,7 +308,7 @@ router.delete("/:ticketNumber", async (req, res) => {
     // Optional: also delete QR code from Cloudinary if it exists
     if (ticket.qrCodeUrl) {
       try {
-        await cloudinary.uploader.destroy(`ronaldshop/qrcodes/${ticketNumber}`);
+        await cloudinary.uploader.destroy(`ronaldselectronicshop/qrcodes/${ticketNumber}`);
       } catch (err) {
         console.warn("⚠️ Failed to remove QR from Cloudinary:", err.message);
       }
